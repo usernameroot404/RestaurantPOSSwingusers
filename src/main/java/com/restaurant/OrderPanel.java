@@ -1,10 +1,28 @@
 package com.restaurant;
 
-import javax.swing.*;
-import javax.swing.table.*;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
 import java.text.NumberFormat;
 import java.util.Locale;
+
+import javax.swing.BorderFactory;
+import javax.swing.DefaultCellEditor;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableColumn;
 
 public class OrderPanel extends JPanel {
     private final DefaultTableModel tableModel;
@@ -28,26 +46,46 @@ public class OrderPanel extends JPanel {
             public boolean isCellEditable(int row, int column) {
                 return column == 3;
             }
+
+            @Override
+            public Class<?> getColumnClass(int column) {
+                return column == 3 ? String.class : Object.class;
+            }
         };
 
         orderTable = new JTable(tableModel);
         orderTable.setRowHeight(40);
+        orderTable.getTableHeader().setReorderingAllowed(false);
 
-        // Add button renderer and editor
-        TableColumn column = orderTable.getColumnModel().getColumn(3);
-        column.setCellRenderer(new ButtonRenderer());
-        column.setCellEditor(new ButtonEditor(new JCheckBox()));
+        // Center align all columns except Action
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        for (int i = 0; i < 3; i++) {
+            orderTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
+
+        // Custom renderer and editor for Action column
+        TableColumn actionColumn = orderTable.getColumnModel().getColumn(3);
+        actionColumn.setCellRenderer(new ButtonRenderer());
+        actionColumn.setCellEditor(new ButtonEditor(new JCheckBox()));
+
+        // Center align header
+        JTableHeader header = orderTable.getTableHeader();
+        ((DefaultTableCellRenderer) header.getDefaultRenderer())
+            .setHorizontalAlignment(JLabel.CENTER);
 
         // Bottom panel
-        totalLabel = new JLabel("Total: $0.00", SwingConstants.RIGHT);
+        totalLabel = new JLabel("Total: $0.00", JLabel.CENTER);
         totalLabel.setFont(new Font("Arial", Font.BOLD, 16));
 
         JButton checkoutBtn = new JButton("Checkout");
         checkoutBtn.addActionListener(e -> checkout());
 
-        JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.add(totalLabel, BorderLayout.CENTER);
-        bottomPanel.add(checkoutBtn, BorderLayout.EAST);
+        JPanel bottomPanel = new JPanel(new GridLayout(1, 3, 10, 0));
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+        bottomPanel.add(new JLabel());
+        bottomPanel.add(totalLabel);
+        bottomPanel.add(checkoutBtn);
 
         add(new JScrollPane(orderTable), BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
@@ -72,7 +110,6 @@ public class OrderPanel extends JPanel {
 
         for (OrderItem item : currentOrder.getItems()) {
             double itemTotal = item.getPriceAtOrder() * item.getQuantity();
-
             tableModel.addRow(new Object[]{
                 item.getMenuItem().getName(),
                 item.getQuantity(),
@@ -88,76 +125,79 @@ public class OrderPanel extends JPanel {
     private void checkout() {
         if (currentOrder.getItems().isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "Order is empty!",
-                    "Warning",
-                    JOptionPane.WARNING_MESSAGE);
+                "Order is empty!",
+                "Warning",
+                JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         if (orderDAO.saveOrder(currentOrder)) {
             JOptionPane.showMessageDialog(this,
-                    "Order saved successfully!",
-                    "Success",
-                    JOptionPane.INFORMATION_MESSAGE);
+                "Order #" + currentOrder.getId() + " saved successfully!",
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE);
             currentOrder = new Order();
             refreshOrderDisplay();
         } else {
             JOptionPane.showMessageDialog(this,
-                    "Failed to save order!",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+                "Failed to save order!",
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // Button renderer for table
+    // Button Renderer
     class ButtonRenderer extends JButton implements TableCellRenderer {
         public ButtonRenderer() {
             setOpaque(true);
+            setBackground(new Color(220, 220, 220));
+            setHorizontalAlignment(CENTER);
         }
 
         public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
-            setText((value == null) ? "" : value.toString());
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            setText(value == null ? "" : value.toString());
             return this;
         }
     }
 
-    // Button editor for table
+    // Button Editor
     class ButtonEditor extends DefaultCellEditor {
-        private JButton button;
-        private boolean isPushed;
-        private int row;
+        private final JButton button;
+        private int editingRow;
 
         public ButtonEditor(JCheckBox checkBox) {
             super(checkBox);
             button = new JButton();
             button.setOpaque(true);
-            button.addActionListener(e -> {
-                if (isPushed) {
-                    OrderItem item = currentOrder.getItems().get(row);
-                    if (item.getQuantity() > 1) {
-                        item.setQuantity(item.getQuantity() - 1);
-                    } else {
-                        currentOrder.getItems().remove(item);
-                    }
-                    // Panggil refresh nanti, setelah editing berhenti
-                    SwingUtilities.invokeLater(() -> refreshOrderDisplay());
-                }
-                fireEditingStopped(); // HARUS tetap dipanggil dulu
+            button.setHorizontalAlignment(JButton.CENTER);
+            button.setBackground(new Color(240, 100, 100));
+            button.setForeground(Color.WHITE);
+            button.addActionListener((ActionEvent e) -> {
+                fireEditingStopped();
+                handleButtonAction();
             });
         }
 
         public Component getTableCellEditorComponent(JTable table, Object value,
-                                                     boolean isSelected, int row, int column) {
-            this.row = row;
-            button.setText((value == null) ? "" : value.toString());
-            isPushed = true;
+                boolean isSelected, int row, int column) {
+            editingRow = row;
+            button.setText(value == null ? "" : value.toString());
             return button;
         }
 
         public Object getCellEditorValue() {
-            isPushed = false;
             return button.getText();
+        }
+
+        private void handleButtonAction() {
+            OrderItem item = currentOrder.getItems().get(editingRow);
+            if (item.getQuantity() > 1) {
+                item.setQuantity(item.getQuantity() - 1);
+            } else {
+                currentOrder.getItems().remove(item);
+            }
+            refreshOrderDisplay();
         }
     }
 }

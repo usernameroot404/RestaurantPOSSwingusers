@@ -1,3 +1,5 @@
+#tes update 4
+
 mvn clean compile exec:java
 
 gunakan kode diatas di terminal 
