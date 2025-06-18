@@ -14,6 +14,15 @@ public class Order {
     private double total;
     private String status = "pending";
     
+    @Column(name = "order_type")
+    private String orderType = "DINE_IN";
+    
+    @Column(name = "payment_method")
+    private String paymentMethod = "CASH";
+    
+    @Column(name = "admin_fee")
+    private double adminFee = 0.0;
+    
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 
@@ -29,18 +38,18 @@ public class Order {
         calculateTotal();
     }
 
-    public List<OrderItem> getItems() {
-        return items;
-    }
-
-    public double getTotal() {
-        return total;
-    }
-
-    // Other getters and setters...
+    // Getters and Setters
     public int getId() { return id; }
+    public double getTotal() { return total; }
     public String getStatus() { return status; }
+    public String getOrderType() { return orderType; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public double getAdminFee() { return adminFee; }
+    public List<OrderItem> getItems() { return items; }
 
     public void setTotal(double total) { this.total = total; }
     public void setStatus(String status) { this.status = status; }
+    public void setOrderType(String orderType) { this.orderType = orderType; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public void setAdminFee(double adminFee) { this.adminFee = adminFee; }
 }

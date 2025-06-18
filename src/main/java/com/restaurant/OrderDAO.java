@@ -12,9 +12,10 @@ public class OrderDAO {
             session = KoneksiDB.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             
-            order.calculateTotal();
+            // Save order
             session.save(order);
             
+            // Save all order items
             for (OrderItem item : order.getItems()) {
                 session.save(item);
             }

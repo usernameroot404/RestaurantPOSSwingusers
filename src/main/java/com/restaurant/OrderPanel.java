@@ -1,36 +1,26 @@
 package com.restaurant;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Font;
-import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
+import java.awt.*;
+import java.awt.event.*;
 import java.text.NumberFormat;
 import java.util.Locale;
-
-import javax.swing.BorderFactory;
-import javax.swing.DefaultCellEditor;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
-import javax.swing.table.TableCellRenderer;
-import javax.swing.table.TableColumn;
+import javax.swing.*;
+import javax.swing.border.*;
+import javax.swing.table.*;
 
 public class OrderPanel extends JPanel {
+    public enum OrderType { DINE_IN, TAKE_AWAY }
+    public enum PaymentMethod { CASH, BCA }
+    
     private final DefaultTableModel tableModel;
     private final JTable orderTable;
     private final JLabel totalLabel;
     private final OrderDAO orderDAO;
     private Order currentOrder;
     private final NumberFormat currencyFormat;
+    
+    private OrderType currentOrderType = OrderType.DINE_IN;
+    private PaymentMethod currentPaymentMethod = PaymentMethod.CASH;
 
     public OrderPanel() {
         this.orderDAO = new OrderDAO();
@@ -38,7 +28,11 @@ public class OrderPanel extends JPanel {
         this.currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);
 
         setLayout(new BorderLayout(10, 10));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        // Create control panel for order type and payment method
+        JPanel controlPanel = createControlPanel();
+        add(controlPanel, BorderLayout.NORTH);
 
         // Table setup
         tableModel = new DefaultTableModel(new Object[]{"Item", "Qty", "Price", "Action"}, 0) {
@@ -46,7 +40,6 @@ public class OrderPanel extends JPanel {
             public boolean isCellEditable(int row, int column) {
                 return column == 3;
             }
-
             @Override
             public Class<?> getColumnClass(int column) {
                 return column == 3 ? String.class : Object.class;
@@ -69,11 +62,6 @@ public class OrderPanel extends JPanel {
         actionColumn.setCellRenderer(new ButtonRenderer());
         actionColumn.setCellEditor(new ButtonEditor(new JCheckBox()));
 
-        // Center align header
-        JTableHeader header = orderTable.getTableHeader();
-        ((DefaultTableCellRenderer) header.getDefaultRenderer())
-            .setHorizontalAlignment(JLabel.CENTER);
-
         // Bottom panel
         totalLabel = new JLabel("Total: $0.00", JLabel.CENTER);
         totalLabel.setFont(new Font("Arial", Font.BOLD, 16));
@@ -82,13 +70,72 @@ public class OrderPanel extends JPanel {
         checkoutBtn.addActionListener(e -> checkout());
 
         JPanel bottomPanel = new JPanel(new GridLayout(1, 3, 10, 0));
-        bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+        bottomPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
         bottomPanel.add(new JLabel());
         bottomPanel.add(totalLabel);
         bottomPanel.add(checkoutBtn);
 
         add(new JScrollPane(orderTable), BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
+    }
+
+    private JPanel createControlPanel() {
+        JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
+        
+        // Order Type Panel
+        JPanel orderTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        orderTypePanel.add(new JLabel("Order Type:"));
+        
+        ButtonGroup orderTypeGroup = new ButtonGroup();
+        JRadioButton dineInBtn = new JRadioButton("Dine In", true);
+        JRadioButton takeAwayBtn = new JRadioButton("Take Away");
+        
+        orderTypeGroup.add(dineInBtn);
+        orderTypeGroup.add(takeAwayBtn);
+        
+        dineInBtn.addActionListener(e -> currentOrderType = OrderType.DINE_IN);
+        takeAwayBtn.addActionListener(e -> currentOrderType = OrderType.TAKE_AWAY);
+        
+        orderTypePanel.add(dineInBtn);
+        orderTypePanel.add(takeAwayBtn);
+        
+        // Payment Method Panel
+        JPanel paymentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        paymentPanel.add(new JLabel("Payment:"));
+        
+        ButtonGroup paymentGroup = new ButtonGroup();
+        JRadioButton cashBtn = new JRadioButton("Cash", true);
+        JRadioButton bcaBtn = new JRadioButton("BCA");
+        
+        paymentGroup.add(cashBtn);
+        paymentGroup.add(bcaBtn);
+        
+        cashBtn.addActionListener(e -> {
+            currentPaymentMethod = PaymentMethod.CASH;
+            updateTotalDisplay();
+        });
+        bcaBtn.addActionListener(e -> {
+            currentPaymentMethod = PaymentMethod.BCA;
+            updateTotalDisplay();
+        });
+        
+        paymentPanel.add(cashBtn);
+        paymentPanel.add(bcaBtn);
+        
+        panel.add(orderTypePanel);
+        panel.add(paymentPanel);
+        
+        return panel;
+    }
+
+    private void updateTotalDisplay() {
+        double total = currentOrder.getTotal();
+        if (currentPaymentMethod == PaymentMethod.BCA) {
+            total += 5.0; // BCA admin fee
+            totalLabel.setText("Total: " + currencyFormat.format(total) + " (incl. $5 BCA fee)");
+        } else {
+            totalLabel.setText("Total: " + currencyFormat.format(total));
+        }
     }
 
     public void addItemToOrder(MenuItem menuItem) {
@@ -119,7 +166,7 @@ public class OrderPanel extends JPanel {
         }
 
         currentOrder.calculateTotal();
-        totalLabel.setText("Total: " + currencyFormat.format(currentOrder.getTotal()));
+        updateTotalDisplay();
     }
 
     private void checkout() {
@@ -131,11 +178,27 @@ public class OrderPanel extends JPanel {
             return;
         }
 
+        // Calculate final total with BCA fee if applicable
+        double total = currentOrder.getTotal();
+        double adminFee = (currentPaymentMethod == PaymentMethod.BCA) ? 5.0 : 0.0;
+        total += adminFee;
+
+        // Set order details
+        currentOrder.setOrderType(currentOrderType.name());
+        currentOrder.setPaymentMethod(currentPaymentMethod.name());
+        currentOrder.setAdminFee(adminFee);
+        currentOrder.setTotal(total);
+
         if (orderDAO.saveOrder(currentOrder)) {
             JOptionPane.showMessageDialog(this,
-                "Order #" + currentOrder.getId() + " saved successfully!",
+                "Order #" + currentOrder.getId() + " saved successfully!\n" +
+                "Type: " + currentOrderType + "\n" +
+                "Payment: " + currentPaymentMethod + 
+                (adminFee > 0 ? " (+$5 fee)" : "") + "\n" +
+                "Total: " + currencyFormat.format(total),
                 "Success",
                 JOptionPane.INFORMATION_MESSAGE);
+                
             currentOrder = new Order();
             refreshOrderDisplay();
         } else {
@@ -146,7 +209,6 @@ public class OrderPanel extends JPanel {
         }
     }
 
-    // Button Renderer
     class ButtonRenderer extends JButton implements TableCellRenderer {
         public ButtonRenderer() {
             setOpaque(true);
@@ -161,7 +223,6 @@ public class OrderPanel extends JPanel {
         }
     }
 
-    // Button Editor
     class ButtonEditor extends DefaultCellEditor {
         private final JButton button;
         private int editingRow;
